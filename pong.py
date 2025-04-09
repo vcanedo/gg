@@ -59,6 +59,11 @@ class Ball:
         self.rect = pygame.Rect(x, y, BALL_SIZE, BALL_SIZE)
         self.speed_x = BALL_SPEED_X * random.choice((1, -1))
         self.speed_y = BALL_SPEED_Y * random.choice((1, -1))
+        self.touches = 0  # Track the number of touches
+        self.color = WHITE  # Initial color of the ball
+        self.target_color = WHITE  # Target color for gradual redness
+        self.size_increase = 0  # Track size increase
+        self.target_size_increase = 0  # Target size increase for gradual growth
 
     def move(self):
         self.rect.x += self.speed_x
@@ -67,14 +72,44 @@ class Ball:
         if self.rect.top <= 0 or self.rect.bottom >= SCREEN_HEIGHT:
             self.speed_y *= -1
 
+        # Gradually adjust color towards target color
+        r = min(255, self.color[0] + (self.target_color[0] - self.color[0]) // 10)
+        g = max(0, self.color[1] + (self.target_color[1] - self.color[1]) // 10)
+        b = max(0, self.color[2] + (self.target_color[2] - self.color[2]) // 10)
+        self.color = (r, g, b)
+
+        # Gradually adjust size towards target size
+        if self.size_increase < self.target_size_increase:
+            self.size_increase += 0.2
+            self.rect.inflate_ip(0.2, 0.2)
+
     def draw(self, screen):
-        pygame.draw.ellipse(screen, WHITE, self.rect)
+        pygame.draw.ellipse(screen, self.color, self.rect)
 
     def reset(self):
         self.rect.x = SCREEN_WIDTH // 2 - BALL_SIZE // 2
         self.rect.y = SCREEN_HEIGHT // 2 - BALL_SIZE // 2
-        self.speed_x *= random.choice((1, -1))
-        self.speed_y *= random.choice((1, -1))
+        self.speed_x = BALL_SPEED_X * random.choice((1, -1))
+        self.speed_y = BALL_SPEED_Y * random.choice((1, -1))
+        self.touches = 0  # Reset touches
+        self.color = WHITE  # Reset color
+        self.target_color = WHITE  # Reset target color
+        self.size_increase = 0  # Reset size
+        self.target_size_increase = 0  # Reset target size
+        self.rect.width = BALL_SIZE
+        self.rect.height = BALL_SIZE
+
+    def increase_speed(self):
+        multiplier = {'easy': 1.05, 'medium': 1.1, 'hard': 1.2}[difficulty]
+        self.speed_x *= multiplier
+        self.speed_y *= multiplier
+
+        # Set target redness
+        red_value = min(255, self.target_color[0] + 20)  # Cap at 255
+        self.target_color = (red_value, 255 - red_value, 255 - red_value)
+
+        # Set target size increase
+        self.target_size_increase += 4
 
 # Initialize paddles and ball
 player_paddle = Paddle(SCREEN_WIDTH - 20, SCREEN_HEIGHT // 2 - PADDLE_HEIGHT // 2)
@@ -90,28 +125,6 @@ font = pygame.font.Font(None, 74)
 
 # Winning score
 WINNING_SCORE = 10
-
-# Banter settings
-banter_subjects = ["You", "Your paddle", "Your skills", "This game"]
-banter_verbs = ["are", "seem", "look"]
-banter_adjectives = ["terrible", "slow", "weak", "pathetic", "laughable", "unimpressive", "mediocre"]
-banter_endings = ["!", "!!", "!!!", "...", "?"]
-ascii_faces = ["(¬‿¬)", "(ಠ_ಠ)", "(¬_¬)", "(¬‿¬)", "(ಠ‿ಠ)"]
-
-banter_interval = 5000  # Time in milliseconds between banter
-last_banter_time = pygame.time.get_ticks()
-
-def generate_banter():
-    subject = random.choice(banter_subjects)
-    verb = random.choice(banter_verbs)
-    adjective = random.choice(banter_adjectives)
-    ending = random.choice(banter_endings)
-    face = random.choice(ascii_faces)
-    return f"{subject} {verb} {adjective}{ending} {face}"
-
-def draw_banter():
-    banter_text = font.render(generate_banter(), True, WHITE)
-    screen.blit(banter_text, (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 + 50))
 
 # Menu settings
 menu_font = pygame.font.Font(None, 74)
@@ -131,6 +144,8 @@ running = True
 game_over = False
 in_menu = True
 clock = pygame.time.Clock()
+countdown = 3  # Countdown starts at 3
+countdown_start_time = None
 
 def draw_scores():
     player_text = font.render(str(player_score), True, WHITE)
@@ -141,6 +156,15 @@ def draw_scores():
 def draw_winner(winner):
     winner_text = font.render(f"{winner} Wins!", True, WHITE)
     screen.blit(winner_text, (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 37))
+
+def draw_countdown(count):
+    countdown_font = pygame.font.Font(None, SCREEN_HEIGHT)  # Large font for countdown
+    countdown_text = str(count) if count > 0 else "GO"
+    opacity = 128 if count > 0 else 28  # Countdown is semi-opaque, "GO" is fully opaque
+    countdown_surface = countdown_font.render(countdown_text, True, (255, 255, 255))
+    countdown_surface.set_alpha(opacity)  # Set opacity based on the text
+    countdown_rect = countdown_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    screen.blit(countdown_surface, countdown_rect)
 
 while running:
     for event in pygame.event.get():
@@ -157,62 +181,87 @@ while running:
                     opponent_paddle.speed = DIFFICULTY_LEVELS[difficulty]
                     in_menu = False
             else:
-                if (event.key == pygame.K_d and pygame.key.get_mods() & pygame.KMOD_CTRL) or \
-                   (event.key == pygame.K_q and pygame.key.get_mods() & pygame.KMOD_CTRL):
+                if event.key == pygame.K_c and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                    in_menu = True  # Return to menu
+                elif (event.key == pygame.K_q and pygame.key.get_mods() & pygame.KMOD_CTRL) or \
+                     (event.key == pygame.K_d and pygame.key.get_mods() & pygame.KMOD_CTRL):
                     running = False
 
     if in_menu:
         draw_menu()
     else:
-        if not game_over:
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_UP]:
-                player_paddle.move_up()
-            if keys[pygame.K_DOWN]:
-                player_paddle.move_down()
+        if countdown > 0:
+            if countdown_start_time is None:
+                countdown_start_time = pygame.time.get_ticks()
+            elapsed_time = (pygame.time.get_ticks() - countdown_start_time) // 1000
+            if elapsed_time >= 1:
+                countdown -= 1
+                countdown_start_time = pygame.time.get_ticks()
+            screen.fill(BLACK)
+            draw_countdown(countdown)
+        else:
+            # Allow the game to start while "GO" is displayed
+            if countdown == 0 and pygame.time.get_ticks() - countdown_start_time < 2000:
+                draw_countdown(countdown)  # Display "GO" in the background
 
-            # Opponent AI
-            if opponent_paddle.rect.centery < ball.rect.centery:
-                opponent_paddle.move_down()
-            if opponent_paddle.rect.centery > ball.rect.centery:
-                opponent_paddle.move_up()
+            if not game_over:
+                keys = pygame.key.get_pressed()
+                # Player paddle controls
+                if keys[pygame.K_UP]:
+                    player_paddle.move_up()
+                if keys[pygame.K_DOWN]:
+                    player_paddle.move_down()
 
-            ball.move()
+                # Fixed Opponent AI
+                if ball.speed_x < 0:  # Only predict when the ball is moving toward the opponent
+                    future_ball_y = ball.rect.y + (ball.speed_y * abs(opponent_paddle.rect.x - ball.rect.x) // abs(ball.speed_x))
+                    if future_ball_y < 0:  # Handle top wall bounce
+                        future_ball_y = -future_ball_y
+                    elif future_ball_y > SCREEN_HEIGHT:  # Handle bottom wall bounce
+                        future_ball_y = SCREEN_HEIGHT - (future_ball_y - SCREEN_HEIGHT)
+                else:
+                    future_ball_y = ball.rect.centery  # Stay centered when the ball is moving away
 
-            # Ball collision with paddles
-            if ball.rect.colliderect(player_paddle.rect) or ball.rect.colliderect(opponent_paddle.rect):
-                ball.speed_x *= -1
+                if opponent_paddle.rect.centery < future_ball_y:
+                    opponent_paddle.move_down()
+                elif opponent_paddle.rect.centery > future_ball_y:
+                    opponent_paddle.move_up()
 
-            # Ball out of bounds
-            if ball.rect.left <= 0:
-                player_score += 1
-                ball.reset()
-            if ball.rect.right >= SCREEN_WIDTH:
-                opponent_score += 1
-                ball.reset()
+                ball.move()
 
-            # Check for winner
-            if player_score >= WINNING_SCORE:
-                game_over = True
-                winner = "Player"
-            elif opponent_score >= WINNING_SCORE:
-                game_over = True
-                winner = "Opponent"
+                # Ball collision with paddles
+                if ball.rect.colliderect(player_paddle.rect) or ball.rect.colliderect(opponent_paddle.rect):
+                    ball.speed_x *= -1
+                    ball.touches += 1
+                    if ball.touches % 5 == 0:  # Increase speed every 5 touches
+                        ball.increase_speed()
 
-            # Random banter
-            current_time = pygame.time.get_ticks()
-            if current_time - last_banter_time > banter_interval:
-                draw_banter()
-                last_banter_time = current_time
+                # Ball out of bounds
+                if ball.rect.left <= 0:
+                    player_score += 1
+                    ball.reset()
+                if ball.rect.right >= SCREEN_WIDTH:
+                    opponent_score += 1
+                    ball.reset()
 
-        # Drawing
-        screen.fill(BLACK)
-        player_paddle.draw(screen)
-        opponent_paddle.draw(screen)
-        ball.draw(screen)
-        draw_scores()
-        if game_over:
-            draw_winner(winner)
+                # Check for winner
+                if player_score >= WINNING_SCORE:
+                    game_over = True
+                    winner = "Player"
+                elif opponent_score >= WINNING_SCORE:
+                    game_over = True
+                    winner = "Opponent"
+
+            # Drawing
+            screen.fill(BLACK)
+            if countdown == 0 and pygame.time.get_ticks() - countdown_start_time < 2000:
+                draw_countdown(countdown)  # Keep displaying "GO" for 2 seconds
+            player_paddle.draw(screen)
+            opponent_paddle.draw(screen)
+            ball.draw(screen)
+            draw_scores()
+            if game_over:
+                draw_winner(winner)
 
         pygame.display.flip()
         clock.tick(60)
