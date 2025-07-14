@@ -1,0 +1,24 @@
+import math
+
+# Screen settings
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+
+# Colors
+SKY = (135, 206, 235)
+GRASS = (16, 200, 16)
+GRASS_ALT = (0, 154, 0)
+ROAD = (50, 50, 50)
+LANE = (255, 255, 255)
+CAR = (200, 0, 0)
+
+# Road and Camera settings
+SEGMENTS = 500
+SEGMENT_LENGTH = 200
+ROAD_WIDTH = 2000
+CAMERA_HEIGHT = 1000
+DRAW_DISTANCE = 300
+FOV = math.pi / 4
+CAMERA_DEPTH = 1 / math.tan(FOV / 2)
+PLAYER_Z = CAMERA_HEIGHT * CAMERA_DEPTH
